@@ -7,97 +7,96 @@
 </head>
 <body>
 
-    <div class="container">
-        <h1>회원 시스템</h1>
+<div class="container">
+    <h1>회원 시스템</h1>
 
-        <div class="input-group">
-            <label for="username">아이디</label>
-            <input type="text" id="username">
-        </div>
-
-        <div class="input-group">
-            <label for="password">비밀번호</label>
-            <input type="password" id="password">
-        </div>
-
-        <button id="signupBtn">회원가입</button>
-        <button id="loginBtn">로그인</button>
-        <button id="logoutBtn" class="secondary" style="display:none;">로그아웃</button>
-
-        <p id="message" style="text-align:center; margin-top:15px;"></p>
+    <div class="input-group">
+        <label>아이디</label>
+        <input type="text" id="username">
     </div>
 
-    <script>
-        const signupBtn = document.getElementById("signupBtn");
-        const loginBtn = document.getElementById("loginBtn");
-        const logoutBtn = document.getElementById("logoutBtn");
-        const message = document.getElementById("message");
+    <div class="input-group">
+        <label>비밀번호</label>
+        <input type="password" id="password">
+    </div>
 
-        function getInputValues() {
-            return {
-                username: document.getElementById("username").value,
-                password: document.getElementById("password").value
-            };
-        }
+    <div class="input-group">
+        <label>생년월일</label>
+        <input type="date" id="birthdate">
+    </div>
 
-        signupBtn.addEventListener("click", () => {
-            const data = getInputValues();
+    <button id="signupBtn">회원가입</button>
+    <button id="loginBtn">로그인</button>
+    <button id="logoutBtn" class="secondary" style="display:none;">로그아웃</button>
 
-            fetch("/signup", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data)
-            })
-            .then(res => res.json())
-            .then(result => {
-                message.innerText = result.message;
-            });
+    <p id="message"></p>
+</div>
+
+<script>
+const signupBtn = document.getElementById("signupBtn");
+const loginBtn = document.getElementById("loginBtn");
+const logoutBtn = document.getElementById("logoutBtn");
+const message = document.getElementById("message");
+
+function getValues() {
+    return {
+        username: document.getElementById("username").value,
+        password: document.getElementById("password").value,
+        birthdate: document.getElementById("birthdate").value
+    };
+}
+
+signupBtn.onclick = () => {
+    fetch("/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(getValues())
+    })
+    .then(res => res.json())
+    .then(data => alert(data.message));
+};
+
+loginBtn.onclick = () => {
+    fetch("/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(getValues())
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert(data.message);
+        checkLogin();
+    });
+};
+
+logoutBtn.onclick = () => {
+    fetch("/logout", { method: "POST" })
+        .then(() => checkLogin());
+};
+
+function checkLogin() {
+    fetch("/me")
+        .then(res => res.json())
+        .then(data => {
+            if (data.loggedIn) {
+                signupBtn.style.display = "none";
+                loginBtn.style.display = "none";
+                logoutBtn.style.display = "block";
+
+                message.innerText = data.birthdayToday
+                    ? `${data.user.username}님 🎉 생일 축하합니다!`
+                    : `${data.user.username}님 환영합니다`;
+            } else {
+                signupBtn.style.display = "block";
+                loginBtn.style.display = "block";
+                logoutBtn.style.display = "none";
+                message.innerText = "";
+            }
         });
+}
 
-        loginBtn.addEventListener("click", () => {
-            const data = getInputValues();
-
-            fetch("/login", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data)
-            })
-            .then(res => res.json())
-            .then(result => {
-                message.innerText = result.message;
-                checkLoginStatus();
-            });
-        });
-
-        logoutBtn.addEventListener("click", () => {
-            fetch("/logout", { method: "POST" })
-            .then(res => res.json())
-            .then(() => {
-                message.innerText = "로그아웃 완료";
-                checkLoginStatus();
-            });
-        });
-
-        function checkLoginStatus() {
-            fetch("/me")
-            .then(res => res.json())
-            .then(data => {
-                if (data.loggedIn) {
-                    signupBtn.style.display = "none";
-                    loginBtn.style.display = "none";
-                    logoutBtn.style.display = "block";
-                    message.innerText = `${data.user.username}님 환영합니다`;
-                } else {
-                    signupBtn.style.display = "block";
-                    loginBtn.style.display = "block";
-                    logoutBtn.style.display = "none";
-                }
-            });
-        }
-
-        // 페이지 로드 시 로그인 상태 확인
-        checkLoginStatus();
-    </script>
+checkLogin();
+</script>
 
 </body>
 </html>
