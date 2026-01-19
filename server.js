@@ -70,10 +70,17 @@ app.post("/signup", async (req, res) => {
         "INSERT INTO users (username, password, birthdate) VALUES (?, ?, ?)",
         [username, hash, birthdate],
         err => {
-            if (err) return res.json({ message: "이미 존재하는 아이디" });
+            if (err) {
+                if (err.message.includes("UNIQUE")) {
+                    return res.json({ message: "이미 존재하는 아이디" });
+                }
+                console.error(err);
+                return res.json({ message: "서버 오류 발생" });
+            }
             res.json({ message: "회원가입 성공" });
         }
     );
+
 });
 
 /* ===== 로그인 ===== */
