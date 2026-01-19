@@ -1,25 +1,22 @@
 const express = require("express");
-const session = require("express-session");
-const bcrypt = require("bcrypt");
 const sqlite3 = require("sqlite3").verbose();
+const bcrypt = require("bcrypt");
+const session = require("express-session");
 const path = require("path");
 
 const app = express();
-const PORT = process.env.PORT || 10000;
 
 /* =====================
    기본 설정
 ===================== */
-app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-app.use(
-    session({
-        secret: "secret-key",
-        resave: false,
-        saveUninitialized: false
-    })
-);
+app.use(session({
+    secret: process.env.SESSION_SECRET || "dev-secret",
+    resave: false,
+    saveUninitialized: false
+}));
 
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -28,17 +25,16 @@ app.use(express.static(path.join(__dirname, "public")));
 ===================== */
 const db = new sqlite3.Database("./users.db");
 
-db.serialize(() => {
-    db.run(`
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            password TEXT,
-            birthdate TEXT,
-            role TEXT DEFAULT 'user'
-        )
-    `);
-});
+/* 테이블 생성 */
+db.run(`
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE,
+    password TEXT,
+    birthdate TEXT,
+    role TEXT DEFAULT 'user'
+)
+`);
 
 /* =====================
    유틸 함수
@@ -56,44 +52,42 @@ function getAge(birthdate) {
     return age;
 }
 
-function requireLogin(req, res, next) {
-    if (!req.session.user) {
-        return res.status(401).send("로그인이 필요합니다");
-    }
-    next();
+function isBirthdayToday(birthdate) {
+    const today = new Date();
+    const birth = new Date(birthdate);
+
+    return (
+        today.getMonth() === birth.getMonth() &&
+        today.getDate() === birth.getDate()
+    );
 }
 
+/* 관리자 권한 체크 */
 function requireAdmin(req, res, next) {
-    console.log("ADMIN CHECK:", req.session.user);
-
     if (!req.session.user || req.session.user.role !== "admin") {
-        return res.status(403).send("관리자 권한이 필요합니다");
+        return res.status(403).json({ message: "관리자 권한 필요" });
     }
     next();
 }
-
 
 /* =====================
    회원가입
 ===================== */
-app.post("/register", async (req, res) => {
-    
-    console.log("REGISTER BODY:", req.body);
-
+app.post("/signup", async (req, res) => {
     const { username, password, birthdate } = req.body;
-    
-    
+
     if (!username || !password || !birthdate) {
         return res.send("모든 항목을 입력하세요");
     }
 
+    // 나이 제한
     if (getAge(birthdate) < 14) {
         return res.send("14세 이상만 가입 가능합니다");
     }
 
     const hashed = await bcrypt.hash(password, 10);
 
-    // ⭐ admin 자동 처리
+    // ⭐ 여기 핵심
     const role = username === "admin" ? "admin" : "user";
 
     db.run(
@@ -119,13 +113,13 @@ app.post("/login", (req, res) => {
         "SELECT * FROM users WHERE username = ?",
         [username],
         async (err, user) => {
-            if (err || !user) {
-                return res.send("아이디 또는 비밀번호 오류");
+            if (!user) {
+                return res.json({ message: "로그인 실패" });
             }
 
             const ok = await bcrypt.compare(password, user.password);
             if (!ok) {
-                return res.send("아이디 또는 비밀번호 오류");
+                return res.json({ message: "로그인 실패" });
             }
 
             req.session.user = {
@@ -133,9 +127,29 @@ app.post("/login", (req, res) => {
                 username: user.username,
                 role: user.role
             };
-            console.log("LOGIN USER:", req.session.user);
 
-            res.send("로그인 성공");
+            res.json({ message: "로그인 성공" });
+        }
+    );
+});
+
+/* =====================
+   로그인 상태 확인
+===================== */
+app.get("/me", (req, res) => {
+    if (!req.session.user) {
+        return res.json({ loggedIn: false });
+    }
+
+    db.get(
+        "SELECT birthdate FROM users WHERE id = ?",
+        [req.session.user.id],
+        (err, row) => {
+            res.json({
+                loggedIn: true,
+                user: req.session.user,
+                birthdayToday: row ? isBirthdayToday(row.birthdate) : false
+            });
         }
     );
 });
@@ -143,55 +157,44 @@ app.post("/login", (req, res) => {
 /* =====================
    로그아웃
 ===================== */
-app.get("/logout", (req, res) => {
+app.post("/logout", (req, res) => {
     req.session.destroy(() => {
-        res.send("로그아웃 완료");
+        res.json({ message: "로그아웃 완료" });
     });
 });
 
 /* =====================
-   오늘 생일인 유저
+   관리자 API
 ===================== */
-app.get("/birthdays/today", requireLogin, (req, res) => {
-    const today = new Date();
-    const mmdd = String(today.getMonth() + 1).padStart(2, "0") +
-                 "-" +
-                 String(today.getDate()).padStart(2, "0");
 
-    db.all(
-        `
-        SELECT username, birthdate
-        FROM users
-        WHERE substr(birthdate, 6, 5) = ?
-        `,
-        [mmdd],
-        (err, rows) => {
-            if (err) return res.send("에러 발생");
-            res.json(rows);
-        }
-    );
-});
-
-/* =====================
-   🔐 관리자: 전체 생일 조회
-===================== */
+/* 전체 사용자 생일 조회 */
 app.get("/admin/birthdays/all", requireAdmin, (req, res) => {
     db.all(
-        `
-        SELECT username, birthdate, role
-        FROM users
-        ORDER BY birthdate
-        `,
+        "SELECT username, birthdate FROM users ORDER BY birthdate",
         (err, rows) => {
-            if (err) return res.send("에러 발생");
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ message: "DB 오류" });
+            }
             res.json(rows);
         }
     );
 });
 
+/* 오늘 생일인 사용자 */
+app.get("/admin/birthdays/today", requireAdmin, (req, res) => {
+    db.all("SELECT username, birthdate FROM users", (err, rows) => {
+        if (err) return res.status(500).json({ message: "DB 오류" });
+
+        const today = rows.filter(u => isBirthdayToday(u.birthdate));
+        res.json(today);
+    });
+});
+
 /* =====================
-   서버 시작
+   서버 실행
 ===================== */
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log("Server running on port", PORT);
 });

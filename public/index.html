@@ -47,7 +47,7 @@ function getValues() {
 }
 
 signupBtn.onclick = () => {
-    fetch("/register", {
+    fetch("/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(getValues())
