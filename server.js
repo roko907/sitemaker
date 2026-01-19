@@ -35,6 +35,14 @@ CREATE TABLE IF NOT EXISTS users (
     role TEXT DEFAULT 'user'
 )
 `);
+// ⚠️ 배포 후 1회만 사용, 바로 삭제할 것
+db.run(
+    "UPDATE users SET role='admin' WHERE username='admin'",
+    err => {
+        if (err) console.error("admin seed error:", err);
+        else console.log("admin 권한 부여 완료");
+    }
+);
 
 /* =====================
    유틸 함수
