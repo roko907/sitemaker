@@ -77,8 +77,12 @@ function requireAdmin(req, res, next) {
    회원가입
 ===================== */
 app.post("/register", async (req, res) => {
-    const { username, password, birthdate } = req.body;
+    
+    console.log("REGISTER BODY:", req.body);
 
+    const { username, password, birthdate } = req.body;
+    
+    
     if (!username || !password || !birthdate) {
         return res.send("모든 항목을 입력하세요");
     }
