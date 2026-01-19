@@ -77,17 +77,14 @@ app.post("/signup", async (req, res) => {
     const { username, password, birthdate } = req.body;
 
     if (!username || !password || !birthdate) {
-        return res.send("모든 항목을 입력하세요");
+        return res.json({ message: "모든 항목을 입력하세요" });
     }
 
-    // 나이 제한
     if (getAge(birthdate) < 14) {
-        return res.send("14세 이상만 가입 가능합니다");
+        return res.json({ message: "14세 이상만 가입 가능합니다" });
     }
 
     const hashed = await bcrypt.hash(password, 10);
-
-    // ⭐ 여기 핵심
     const role = username === "admin" ? "admin" : "user";
 
     db.run(
@@ -96,9 +93,9 @@ app.post("/signup", async (req, res) => {
         [username, hashed, birthdate, role],
         err => {
             if (err) {
-                return res.send("이미 존재하는 아이디입니다");
+                return res.json({ message: "이미 존재하는 아이디입니다" });
             }
-            res.send("회원가입 성공");
+            res.json({ message: "회원가입 성공" });
         }
     );
 });
