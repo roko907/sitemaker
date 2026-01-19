@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>관리자 페이지</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+    <h1>관리자 페이지</h1>
+
+    <button id="allBtn">전체 사용자 생일</button>
+    <button id="todayBtn">오늘 생일</button>
+    <button class="secondary" onclick="location.href='/'">메인으로</button>
+
+    <pre id="result"></pre>
+</div>
+
+<script>
+const result = document.getElementById("result");
+
+document.getElementById("allBtn").onclick = () => {
+    fetch("/admin/birthdays/all")
+        .then(res => {
+            if (res.status === 403) {
+                alert("관리자 권한 필요");
+                location.href = "/";
+                return;
+            }
+            return res.json();
+        })
+        .then(data => {
+            if (data) result.textContent = JSON.stringify(data, null, 2);
+        });
+};
+
+document.getElementById("todayBtn").onclick = () => {
+    fetch("/admin/birthdays/today")
+        .then(res => res.json())
+        .then(data => {
+            result.textContent = JSON.stringify(data, null, 2);
+        });
+};
+</script>
+
+</body>
+</html>

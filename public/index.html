@@ -10,24 +10,14 @@
 <div class="container">
     <h1>회원 시스템</h1>
 
-    <div class="input-group">
-        <label>아이디</label>
-        <input type="text" id="username">
-    </div>
-
-    <div class="input-group">
-        <label>비밀번호</label>
-        <input type="password" id="password">
-    </div>
-
-    <div class="input-group">
-        <label>생년월일</label>
-        <input type="date" id="birthdate">
-    </div>
+    <input id="username" placeholder="아이디">
+    <input id="password" type="password" placeholder="비밀번호">
+    <input id="birthdate" type="date">
 
     <button id="signupBtn">회원가입</button>
     <button id="loginBtn">로그인</button>
     <button id="logoutBtn" class="secondary" style="display:none;">로그아웃</button>
+    <button id="adminBtn" class="secondary" style="display:none;">관리자 페이지</button>
 
     <p id="message"></p>
 </div>
@@ -36,13 +26,14 @@
 const signupBtn = document.getElementById("signupBtn");
 const loginBtn = document.getElementById("loginBtn");
 const logoutBtn = document.getElementById("logoutBtn");
+const adminBtn = document.getElementById("adminBtn");
 const message = document.getElementById("message");
 
 function getValues() {
     return {
-        username: document.getElementById("username").value,
-        password: document.getElementById("password").value,
-        birthdate: document.getElementById("birthdate").value
+        username: username.value,
+        password: password.value,
+        birthdate: birthdate.value
     };
 }
 
@@ -74,6 +65,10 @@ logoutBtn.onclick = () => {
         .then(() => checkLogin());
 };
 
+adminBtn.onclick = () => {
+    location.href = "/admin.html";
+};
+
 function checkLogin() {
     fetch("/me")
         .then(res => res.json())
@@ -83,6 +78,9 @@ function checkLogin() {
                 loginBtn.style.display = "none";
                 logoutBtn.style.display = "block";
 
+                adminBtn.style.display =
+                    data.user.role === "admin" ? "block" : "none";
+
                 message.innerText = data.birthdayToday
                     ? `${data.user.username}님 🎉 생일 축하합니다!`
                     : `${data.user.username}님 환영합니다`;
@@ -90,6 +88,7 @@ function checkLogin() {
                 signupBtn.style.display = "block";
                 loginBtn.style.display = "block";
                 logoutBtn.style.display = "none";
+                adminBtn.style.display = "none";
                 message.innerText = "";
             }
         });

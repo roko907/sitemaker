@@ -25,7 +25,6 @@ app.use(express.static(path.join(__dirname, "public")));
 ===================== */
 const db = new sqlite3.Database("./users.db");
 
-/* 테이블 생성 */
 db.run(`
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,7 +61,6 @@ function isBirthdayToday(birthdate) {
     );
 }
 
-/* 관리자 권한 체크 */
 function requireAdmin(req, res, next) {
     if (!req.session.user || req.session.user.role !== "admin") {
         return res.status(403).json({ message: "관리자 권한 필요" });
@@ -77,11 +75,11 @@ app.post("/signup", async (req, res) => {
     const { username, password, birthdate } = req.body;
 
     if (!username || !password || !birthdate) {
-        return res.json({ message: "모든 항목을 입력하세요" });
+        return res.json({ message: "모든 항목 입력 필요" });
     }
 
     if (getAge(birthdate) < 14) {
-        return res.json({ message: "14세 이상만 가입 가능합니다" });
+        return res.json({ message: "14세 이상만 가입 가능" });
     }
 
     const hashed = await bcrypt.hash(password, 10);
@@ -93,7 +91,7 @@ app.post("/signup", async (req, res) => {
         [username, hashed, birthdate, role],
         err => {
             if (err) {
-                return res.json({ message: "이미 존재하는 아이디입니다" });
+                return res.json({ message: "이미 존재하는 아이디" });
             }
             res.json({ message: "회원가입 성공" });
         }
@@ -131,7 +129,7 @@ app.post("/login", (req, res) => {
 });
 
 /* =====================
-   로그인 상태 확인
+   로그인 상태
 ===================== */
 app.get("/me", (req, res) => {
     if (!req.session.user) {
@@ -163,26 +161,18 @@ app.post("/logout", (req, res) => {
 /* =====================
    관리자 API
 ===================== */
-
-/* 전체 사용자 생일 조회 */
 app.get("/admin/birthdays/all", requireAdmin, (req, res) => {
     db.all(
         "SELECT username, birthdate FROM users ORDER BY birthdate",
         (err, rows) => {
-            if (err) {
-                console.error(err);
-                return res.status(500).json({ message: "DB 오류" });
-            }
+            if (err) return res.status(500).json({ message: "DB 오류" });
             res.json(rows);
         }
     );
 });
 
-/* 오늘 생일인 사용자 */
 app.get("/admin/birthdays/today", requireAdmin, (req, res) => {
     db.all("SELECT username, birthdate FROM users", (err, rows) => {
-        if (err) return res.status(500).json({ message: "DB 오류" });
-
         const today = rows.filter(u => isBirthdayToday(u.birthdate));
         res.json(today);
     });
