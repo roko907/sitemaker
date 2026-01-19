@@ -6,7 +6,9 @@ const path = require("path");
 
 const app = express();
 
-/* ===== 기본 설정 ===== */
+/* =====================
+   기본 설정
+===================== */
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -18,18 +20,25 @@ app.use(session({
 
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ===== DB ===== */
+/* =====================
+   DB 설정
+===================== */
 const db = new sqlite3.Database("./users.db");
 
+/* 테이블 생성 */
 db.run(`
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE,
     password TEXT,
-    birthdate TEXT
-)`);
+    birthdate TEXT,
+    role TEXT DEFAULT 'user'
+)
+`);
 
-/* ===== 유틸 ===== */
+/* =====================
+   유틸 함수
+===================== */
 function getAge(birthdate) {
     const today = new Date();
     const birth = new Date(birthdate);
@@ -47,11 +56,23 @@ function isBirthdayToday(birthdate) {
     const today = new Date();
     const birth = new Date(birthdate);
 
-    return today.getMonth() === birth.getMonth() &&
-           today.getDate() === birth.getDate();
+    return (
+        today.getMonth() === birth.getMonth() &&
+        today.getDate() === birth.getDate()
+    );
 }
 
-/* ===== 회원가입 ===== */
+/* 관리자 권한 체크 */
+function requireAdmin(req, res, next) {
+    if (!req.session.user || req.session.user.role !== "admin") {
+        return res.status(403).json({ message: "관리자 권한 필요" });
+    }
+    next();
+}
+
+/* =====================
+   회원가입
+===================== */
 app.post("/signup", async (req, res) => {
     const { username, password, birthdate } = req.body;
     const MIN_AGE = 14;
@@ -74,16 +95,17 @@ app.post("/signup", async (req, res) => {
                 if (err.message.includes("UNIQUE")) {
                     return res.json({ message: "이미 존재하는 아이디" });
                 }
-                console.error(err);
-                return res.json({ message: "서버 오류 발생" });
+                console.error("signup error:", err);
+                return res.json({ message: "서버 오류" });
             }
             res.json({ message: "회원가입 성공" });
         }
     );
-
 });
 
-/* ===== 로그인 ===== */
+/* =====================
+   로그인
+===================== */
 app.post("/login", (req, res) => {
     const { username, password } = req.body;
 
@@ -91,18 +113,29 @@ app.post("/login", (req, res) => {
         "SELECT * FROM users WHERE username = ?",
         [username],
         async (err, user) => {
-            if (!user) return res.json({ message: "로그인 실패" });
+            if (!user) {
+                return res.json({ message: "로그인 실패" });
+            }
 
             const ok = await bcrypt.compare(password, user.password);
-            if (!ok) return res.json({ message: "로그인 실패" });
+            if (!ok) {
+                return res.json({ message: "로그인 실패" });
+            }
 
-            req.session.user = { id: user.id, username: user.username };
+            req.session.user = {
+                id: user.id,
+                username: user.username,
+                role: user.role
+            };
+
             res.json({ message: "로그인 성공" });
         }
     );
 });
 
-/* ===== 로그인 상태 ===== */
+/* =====================
+   로그인 상태 확인
+===================== */
 app.get("/me", (req, res) => {
     if (!req.session.user) {
         return res.json({ loggedIn: false });
@@ -121,24 +154,47 @@ app.get("/me", (req, res) => {
     );
 });
 
-/* ===== 로그아웃 ===== */
+/* =====================
+   로그아웃
+===================== */
 app.post("/logout", (req, res) => {
-    req.session.destroy(() => res.json({}));
-});
-
-/* ===== 관리자: 오늘 생일 ===== */
-app.get("/admin/birthdays", (req, res) => {
-    if (!req.session.user || req.session.user.username !== "admin") {
-        return res.status(403).json({ message: "권한 없음" });
-    }
-
-    db.all("SELECT username, birthdate FROM users", (err, rows) => {
-        res.json(rows.filter(u => isBirthdayToday(u.birthdate)));
+    req.session.destroy(() => {
+        res.json({ message: "로그아웃 완료" });
     });
 });
 
-/* ===== 서버 실행 ===== */
+/* =====================
+   관리자 API
+===================== */
+
+/* 전체 사용자 생일 조회 */
+app.get("/admin/birthdays/all", requireAdmin, (req, res) => {
+    db.all(
+        "SELECT username, birthdate FROM users ORDER BY birthdate",
+        (err, rows) => {
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ message: "DB 오류" });
+            }
+            res.json(rows);
+        }
+    );
+});
+
+/* 오늘 생일인 사용자 */
+app.get("/admin/birthdays/today", requireAdmin, (req, res) => {
+    db.all("SELECT username, birthdate FROM users", (err, rows) => {
+        if (err) return res.status(500).json({ message: "DB 오류" });
+
+        const today = rows.filter(u => isBirthdayToday(u.birthdate));
+        res.json(today);
+    });
+});
+
+/* =====================
+   서버 실행
+===================== */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log("server running on", PORT);
+    console.log("Server running on port", PORT);
 });
