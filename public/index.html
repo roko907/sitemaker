@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>회원 시스템</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="container">
+        <h1>회원 시스템</h1>
+
+        <div class="input-group">
+            <label for="username">아이디</label>
+            <input type="text" id="username">
+        </div>
+
+        <div class="input-group">
+            <label for="password">비밀번호</label>
+            <input type="password" id="password">
+        </div>
+
+        <button id="signupBtn">회원가입</button>
+        <button id="loginBtn">로그인</button>
+        <button id="logoutBtn" class="secondary" style="display:none;">로그아웃</button>
+
+        <p id="message" style="text-align:center; margin-top:15px;"></p>
+    </div>
+
+    <script>
+        const signupBtn = document.getElementById("signupBtn");
+        const loginBtn = document.getElementById("loginBtn");
+        const logoutBtn = document.getElementById("logoutBtn");
+        const message = document.getElementById("message");
+
+        function getInputValues() {
+            return {
+                username: document.getElementById("username").value,
+                password: document.getElementById("password").value
+            };
+        }
+
+        signupBtn.addEventListener("click", () => {
+            const data = getInputValues();
+
+            fetch("/signup", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(result => {
+                message.innerText = result.message;
+            });
+        });
+
+        loginBtn.addEventListener("click", () => {
+            const data = getInputValues();
+
+            fetch("/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(result => {
+                message.innerText = result.message;
+                checkLoginStatus();
+            });
+        });
+
+        logoutBtn.addEventListener("click", () => {
+            fetch("/logout", { method: "POST" })
+            .then(res => res.json())
+            .then(() => {
+                message.innerText = "로그아웃 완료";
+                checkLoginStatus();
+            });
+        });
+
+        function checkLoginStatus() {
+            fetch("/me")
+            .then(res => res.json())
+            .then(data => {
+                if (data.loggedIn) {
+                    signupBtn.style.display = "none";
+                    loginBtn.style.display = "none";
+                    logoutBtn.style.display = "block";
+                    message.innerText = `${data.user.username}님 환영합니다`;
+                } else {
+                    signupBtn.style.display = "block";
+                    loginBtn.style.display = "block";
+                    logoutBtn.style.display = "none";
+                }
+            });
+        }
+
+        // 페이지 로드 시 로그인 상태 확인
+        checkLoginStatus();
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,76 @@
+/* 전체 화면 기본 설정 */
+body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background-color: #f4f6f8;
+
+    /* 가운데 정렬 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+/* 회원가입 / 로그인 카드 */
+.container {
+    background-color: white;
+    padding: 30px;
+    width: 320px;
+
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* 제목 */
+.container h1 {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+/* 입력 그룹 */
+.input-group {
+    margin-bottom: 15px;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 14px;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 8px;
+    font-size: 14px;
+
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+/* 버튼 공통 */
+button {
+    width: 100%;
+    padding: 10px;
+    margin-top: 10px;
+
+    font-size: 14px;
+    border: none;
+    border-radius: 4px;
+
+    background-color: #4f46e5;
+    color: white;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #4338ca;
+}
+
+/* 보조 버튼 (로그아웃 등 대비용) */
+button.secondary {
+    background-color: #6b7280;
+}
+
+button.secondary:hover {
+    background-color: #4b5563;
+}
