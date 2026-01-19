@@ -24,25 +24,42 @@ app.use(express.static(path.join(__dirname, "public")));
    DB 설정
 ===================== */
 const db = new sqlite3.Database("./users.db");
+db.serialize(() => {
+    // 1️⃣ users 테이블 생성
+    db.run(`
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            password TEXT,
+            birthdate TEXT,
+            role TEXT DEFAULT 'user'
+        )
+    `);
 
-/* 테이블 생성 */
-db.run(`
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE,
-    password TEXT,
-    birthdate TEXT,
-    role TEXT DEFAULT 'user'
-)
-`);
-// ⚠️ 배포 후 1회만 사용, 바로 삭제할 것
-db.run(
-    "UPDATE users SET role='admin' WHERE username='admin'",
-    err => {
-        if (err) console.error("admin seed error:", err);
-        else console.log("admin 권한 부여 완료");
-    }
-);
+    // 2️⃣ admin 계정이 있으면 role 승격
+    db.get(
+        "SELECT id FROM users WHERE username = 'admin'",
+        (err, row) => {
+            if (err) {
+                console.error("admin check error:", err);
+                return;
+            }
+
+            if (row) {
+                db.run(
+                    "UPDATE users SET role='admin' WHERE username='admin'",
+                    err => {
+                        if (err) {
+                            console.error("admin seed error:", err);
+                        } else {
+                            console.log("admin 권한 부여 완료");
+                        }
+                    }
+                );
+            }
+        }
+    );
+});
 
 /* =====================
    유틸 함수
