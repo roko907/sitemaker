@@ -64,11 +64,14 @@ function requireLogin(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
+    console.log("ADMIN CHECK:", req.session.user);
+
     if (!req.session.user || req.session.user.role !== "admin") {
         return res.status(403).send("관리자 권한이 필요합니다");
     }
     next();
 }
+
 
 /* =====================
    회원가입
@@ -126,6 +129,7 @@ app.post("/login", (req, res) => {
                 username: user.username,
                 role: user.role
             };
+            console.log("LOGIN USER:", req.session.user);
 
             res.send("로그인 성공");
         }
