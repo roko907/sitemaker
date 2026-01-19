@@ -1,22 +1,25 @@
 const express = require("express");
-const sqlite3 = require("sqlite3").verbose();
-const bcrypt = require("bcrypt");
 const session = require("express-session");
+const bcrypt = require("bcrypt");
+const sqlite3 = require("sqlite3").verbose();
 const path = require("path");
 
 const app = express();
+const PORT = process.env.PORT || 10000;
 
 /* =====================
    기본 설정
 ===================== */
-app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
-app.use(session({
-    secret: process.env.SESSION_SECRET || "dev-secret",
-    resave: false,
-    saveUninitialized: false
-}));
+app.use(
+    session({
+        secret: "secret-key",
+        resave: false,
+        saveUninitialized: false
+    })
+);
 
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -24,8 +27,8 @@ app.use(express.static(path.join(__dirname, "public")));
    DB 설정
 ===================== */
 const db = new sqlite3.Database("./users.db");
+
 db.serialize(() => {
-    // 1️⃣ users 테이블 생성
     db.run(`
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,30 +38,6 @@ db.serialize(() => {
             role TEXT DEFAULT 'user'
         )
     `);
-
-    // 2️⃣ admin 계정이 있으면 role 승격
-    db.get(
-        "SELECT id FROM users WHERE username = 'admin'",
-        (err, row) => {
-            if (err) {
-                console.error("admin check error:", err);
-                return;
-            }
-
-            if (row) {
-                db.run(
-                    "UPDATE users SET role='admin' WHERE username='admin'",
-                    err => {
-                        if (err) {
-                            console.error("admin seed error:", err);
-                        } else {
-                            console.log("admin 권한 부여 완료");
-                        }
-                    }
-                );
-            }
-        }
-    );
 });
 
 /* =====================
@@ -77,20 +56,16 @@ function getAge(birthdate) {
     return age;
 }
 
-function isBirthdayToday(birthdate) {
-    const today = new Date();
-    const birth = new Date(birthdate);
-
-    return (
-        today.getMonth() === birth.getMonth() &&
-        today.getDate() === birth.getDate()
-    );
+function requireLogin(req, res, next) {
+    if (!req.session.user) {
+        return res.status(401).send("로그인이 필요합니다");
+    }
+    next();
 }
 
-/* 관리자 권한 체크 */
 function requireAdmin(req, res, next) {
     if (!req.session.user || req.session.user.role !== "admin") {
-        return res.status(403).json({ message: "관리자 권한 필요" });
+        return res.status(403).send("관리자 권한이 필요합니다");
     }
     next();
 }
@@ -98,32 +73,31 @@ function requireAdmin(req, res, next) {
 /* =====================
    회원가입
 ===================== */
-app.post("/signup", async (req, res) => {
+app.post("/register", async (req, res) => {
     const { username, password, birthdate } = req.body;
-    const MIN_AGE = 14;
 
     if (!username || !password || !birthdate) {
-        return res.json({ message: "모든 항목을 입력하세요" });
+        return res.send("모든 항목을 입력하세요");
     }
 
-    if (getAge(birthdate) < MIN_AGE) {
-        return res.json({ message: `${MIN_AGE}세 이상만 가입 가능` });
+    if (getAge(birthdate) < 14) {
+        return res.send("14세 이상만 가입 가능합니다");
     }
 
-    const hash = await bcrypt.hash(password, 10);
+    const hashed = await bcrypt.hash(password, 10);
+
+    // ⭐ admin 자동 처리
+    const role = username === "admin" ? "admin" : "user";
 
     db.run(
-        "INSERT INTO users (username, password, birthdate) VALUES (?, ?, ?)",
-        [username, hash, birthdate],
+        `INSERT INTO users (username, password, birthdate, role)
+         VALUES (?, ?, ?, ?)`,
+        [username, hashed, birthdate, role],
         err => {
             if (err) {
-                if (err.message.includes("UNIQUE")) {
-                    return res.json({ message: "이미 존재하는 아이디" });
-                }
-                console.error("signup error:", err);
-                return res.json({ message: "서버 오류" });
+                return res.send("이미 존재하는 아이디입니다");
             }
-            res.json({ message: "회원가입 성공" });
+            res.send("회원가입 성공");
         }
     );
 });
@@ -138,13 +112,13 @@ app.post("/login", (req, res) => {
         "SELECT * FROM users WHERE username = ?",
         [username],
         async (err, user) => {
-            if (!user) {
-                return res.json({ message: "로그인 실패" });
+            if (err || !user) {
+                return res.send("아이디 또는 비밀번호 오류");
             }
 
             const ok = await bcrypt.compare(password, user.password);
             if (!ok) {
-                return res.json({ message: "로그인 실패" });
+                return res.send("아이디 또는 비밀번호 오류");
             }
 
             req.session.user = {
@@ -153,28 +127,7 @@ app.post("/login", (req, res) => {
                 role: user.role
             };
 
-            res.json({ message: "로그인 성공" });
-        }
-    );
-});
-
-/* =====================
-   로그인 상태 확인
-===================== */
-app.get("/me", (req, res) => {
-    if (!req.session.user) {
-        return res.json({ loggedIn: false });
-    }
-
-    db.get(
-        "SELECT birthdate FROM users WHERE id = ?",
-        [req.session.user.id],
-        (err, row) => {
-            res.json({
-                loggedIn: true,
-                user: req.session.user,
-                birthdayToday: row ? isBirthdayToday(row.birthdate) : false
-            });
+            res.send("로그인 성공");
         }
     );
 });
@@ -182,44 +135,55 @@ app.get("/me", (req, res) => {
 /* =====================
    로그아웃
 ===================== */
-app.post("/logout", (req, res) => {
+app.get("/logout", (req, res) => {
     req.session.destroy(() => {
-        res.json({ message: "로그아웃 완료" });
+        res.send("로그아웃 완료");
     });
 });
 
 /* =====================
-   관리자 API
+   오늘 생일인 유저
 ===================== */
+app.get("/birthdays/today", requireLogin, (req, res) => {
+    const today = new Date();
+    const mmdd = String(today.getMonth() + 1).padStart(2, "0") +
+                 "-" +
+                 String(today.getDate()).padStart(2, "0");
 
-/* 전체 사용자 생일 조회 */
-app.get("/admin/birthdays/all", requireAdmin, (req, res) => {
     db.all(
-        "SELECT username, birthdate FROM users ORDER BY birthdate",
+        `
+        SELECT username, birthdate
+        FROM users
+        WHERE substr(birthdate, 6, 5) = ?
+        `,
+        [mmdd],
         (err, rows) => {
-            if (err) {
-                console.error(err);
-                return res.status(500).json({ message: "DB 오류" });
-            }
+            if (err) return res.send("에러 발생");
             res.json(rows);
         }
     );
 });
 
-/* 오늘 생일인 사용자 */
-app.get("/admin/birthdays/today", requireAdmin, (req, res) => {
-    db.all("SELECT username, birthdate FROM users", (err, rows) => {
-        if (err) return res.status(500).json({ message: "DB 오류" });
-
-        const today = rows.filter(u => isBirthdayToday(u.birthdate));
-        res.json(today);
-    });
+/* =====================
+   🔐 관리자: 전체 생일 조회
+===================== */
+app.get("/admin/birthdays/all", requireAdmin, (req, res) => {
+    db.all(
+        `
+        SELECT username, birthdate, role
+        FROM users
+        ORDER BY birthdate
+        `,
+        (err, rows) => {
+            if (err) return res.send("에러 발생");
+            res.json(rows);
+        }
+    );
 });
 
 /* =====================
-   서버 실행
+   서버 시작
 ===================== */
-const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log("Server running on port", PORT);
+    console.log(`Server running on port ${PORT}`);
 });
